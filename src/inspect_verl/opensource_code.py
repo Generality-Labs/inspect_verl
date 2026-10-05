@@ -85,10 +85,13 @@ def verifier_path(test_command: str) -> str | None:
     return None
 
 
-def compose_file(image: str, cwd: str, network: str, platform: str = "linux/amd64") -> str:
+def compose_file(image: str, cwd: str, network: str, platform: str | None = None) -> str:
     """A compose file running `image` idle at `cwd`, cached per configuration.
 
-    The published images are amd64 only; `platform` exists for locally built ones.
+    Only keys inspect_k8s_sandbox's converter accepts, so the same file runs locally
+    and on Hawk: no `platform` unless asked for (the converter refuses it; the images
+    are amd64 and so are Hawk's nodes), and no `init`, which Kubernetes ignores and the
+    training pods did not have.
     """
     key = hashlib.sha256(f"{image}|{cwd}|{network}|{platform}".encode()).hexdigest()[:16]
     path = Path(tempfile.gettempdir()) / "inspect_verl" / f"{key}.yaml"
@@ -96,14 +99,14 @@ def compose_file(image: str, cwd: str, network: str, platform: str = "linux/amd6
         path.parent.mkdir(parents=True, exist_ok=True)
         service: dict[str, Any] = {
             "image": image,
-            "platform": platform,
             "working_dir": cwd,
             "command": ["tail", "-f", "/dev/null"],
-            "init": True,
             "cpus": CPUS,
             "mem_limit": MEMORY,
             "network_mode": network,
         }
+        if platform:
+            service["platform"] = platform
         path.write_text(yaml.safe_dump({"services": {"default": service}}))
     return str(path)
 
@@ -113,7 +116,7 @@ def samples(
     instance_ids: list[str] | None,
     limit: int | None,
     network: str,
-    platform: str = "linux/amd64",
+    platform: str | None = None,
 ) -> list[Sample]:
     rows = read_rows(source)
     if instance_ids is not None:
@@ -166,10 +169,12 @@ def prepare_repo() -> Solver:
         _, beyond = await _run(f"git rev-list --all --not {base} | head -n 5", cwd)
         verifier = verifier_path(meta["test_command"])
         verifier_present = verifier is not None and (await _run(f"test -e {verifier}", cwd))[0]
-        # the hidden tests already in the tree: the patch reverses cleanly
-        await sandbox().write_file(PATCH_IN_BOX, meta["test_patch"])
-        already_applied, _ = await _run(f"git apply --check -R {PATCH_IN_BOX}", cwd)
-        await _run(f"rm -f {PATCH_IN_BOX}", cwd)
+        # the hidden tests already in the tree: the patch reverses cleanly. Piped on
+        # stdin, so the hidden tests never touch the box's disk before the agent runs
+        check = await sandbox().exec(
+            ["git", "apply", "--check", "-R", "-"], input=meta["test_patch"], cwd=cwd
+        )
+        already_applied = check.success
 
         state.store.set(
             _STORE,
@@ -274,7 +279,7 @@ def mimo_code(
     instance_ids: list[str] | None = None,
     limit: int | None = None,
     network: str = "none",
-    platform: str = "linux/amd64",
+    platform: str | None = None,
 ) -> Task:
     """MiMo-V2.6 RL code environments, graded with their reward.
 
@@ -283,7 +288,8 @@ def mimo_code(
         instance_ids: Run only these tasks.
         limit: Run at most this many (after `instance_ids`).
         network: The container's network mode; none, as the training pods had no egress.
-        platform: The image platform; the published images are linux/amd64.
+        platform: Force an image platform, e.g. linux/amd64 on an arm64 laptop; unset
+            otherwise (Hawk's converter refuses the key).
     """
     return Task(
         dataset=samples(source, instance_ids, limit, network, platform),
@@ -299,7 +305,7 @@ def mimo_code_probes(
     instance_ids: list[str] | None = None,
     limit: int | None = None,
     network: str = "none",
-    platform: str = "linux/amd64",
+    platform: str | None = None,
 ) -> Task:
     """The environments with no agent at all: checks that need no model.
 

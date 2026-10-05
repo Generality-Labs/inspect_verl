@@ -15,7 +15,7 @@ dependencies = [
 inspect_verl = "inspect_verl._registry"
 
 [dependency-groups]
-dev = ["pytest>=8"]
+dev = ["pytest>=8", "inspect-k8s-sandbox>=0.13"]
 
 [build-system]
 requires = ["hatchling"]

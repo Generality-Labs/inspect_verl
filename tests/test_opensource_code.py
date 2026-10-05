@@ -48,7 +48,19 @@ def test_compose_runs_the_image_idle_without_network() -> None:
     compose = yaml.safe_load(Path(compose_file("img:tag", "/testbed", "none")).read_text())
     service = compose["services"]["default"]
     assert service["image"] == "img:tag" and service["working_dir"] == "/testbed"
-    assert service["network_mode"] == "none" and service["platform"] == "linux/amd64"
+    assert service["network_mode"] == "none" and "platform" not in service
+
+
+def test_the_compose_converts_for_hawk() -> None:
+    """Hawk runs compose sandboxes through inspect_k8s_sandbox's converter, which
+    refuses keys it does not know (`platform` did, on the first version)."""
+    converter = pytest.importorskip("k8s_sandbox.compose")
+    values = converter.convert_compose_to_helm_values(
+        Path(compose_file("xiaomimimo/mimo-v2.6-rl-oss:format-code-task-003060", "/testbed", "none"))
+    )
+    service = values["services"]["default"]
+    assert service["image"].endswith("format-code-task-003060")
+    assert service["workingDir"] == "/testbed"
 
 
 # --- end to end on a tiny image: the reward contract itself -----------------------
