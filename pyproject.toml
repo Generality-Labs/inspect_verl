@@ -1,0 +1,29 @@
+[project]
+name = "inspect-verl"
+version = "0.0.1"
+description = "verl RL environments as Inspect tasks"
+requires-python = ">=3.12"
+dependencies = [
+    "inspect-ai>=0.3.259",
+    "pandas",
+    "pyarrow",
+    "huggingface-hub",
+    "pyyaml",
+]
+
+[project.entry-points.inspect_ai]
+inspect_verl = "inspect_verl._registry"
+
+[dependency-groups]
+dev = ["pytest>=8"]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/inspect_verl"]
+
+[tool.pytest.ini_options]
+markers = ["docker: needs a running Docker daemon"]
+addopts = "-m 'not docker'"
