@@ -55,9 +55,13 @@ def test_the_compose_converts_for_hawk() -> None:
     """Hawk runs compose sandboxes through inspect_k8s_sandbox's converter, which
     refuses keys it does not know (`platform` did, on the first version)."""
     converter = pytest.importorskip("k8s_sandbox.compose")
-    values = converter.convert_compose_to_helm_values(
-        Path(compose_file("xiaomimimo/mimo-v2.6-rl-oss:format-code-task-003060", "/testbed", "none"))
-    )
+    from inspect_ai.util._sandbox.compose import is_compose_yaml
+    from k8s_sandbox.compose._compose import is_docker_compose_file
+
+    path = compose_file("xiaomimimo/mimo-v2.6-rl-oss:format-code-task-003060", "/testbed", "none")
+    # recognised by name, or Hawk hands it to Helm as raw values (the 10-05 second Hawk launch)
+    assert is_compose_yaml(path) and is_docker_compose_file(Path(path))
+    values = converter.convert_compose_to_helm_values(Path(path))
     service = values["services"]["default"]
     assert service["image"].endswith("format-code-task-003060")
     assert service["workingDir"] == "/testbed"

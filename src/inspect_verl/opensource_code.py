@@ -94,7 +94,9 @@ def compose_file(image: str, cwd: str, network: str, platform: str | None = None
     training pods did not have.
     """
     key = hashlib.sha256(f"{image}|{cwd}|{network}|{platform}".encode()).hexdigest()[:16]
-    path = Path(tempfile.gettempdir()) / "inspect_verl" / f"{key}.yaml"
+    # named compose.yaml: Inspect and inspect_k8s_sandbox recognise a compose file by
+    # its name, and on Hawk anything else is passed to Helm as raw values
+    path = Path(tempfile.gettempdir()) / "inspect_verl" / key / "compose.yaml"
     if not path.exists():
         path.parent.mkdir(parents=True, exist_ok=True)
         service: dict[str, Any] = {
